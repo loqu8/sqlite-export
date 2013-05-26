@@ -1,0 +1,41 @@
+#!/bin/sh
+
+set -e
+
+mydir="$(cd "$(dirname "$0")" && pwd)"
+cd "$mydir"
+
+SQLSRC='http://sqlite.org/src'
+
+for util in ./fossil ./git-export-filter git; do
+  if ! command -v $util > /dev/null; then
+    echo Missing $util '(did you run the build script?)' >&2
+    exit 1
+  fi
+done
+
+if ! [ -e sqlite.fsl ]; then
+  echo "Cloning $SQLSRC into sqlite.fsl" >&2
+  ./fossil clone "$SQLSRC" sqlite.fsl
+else
+  echo "Updating sqlite.fsl from $SQLSRC" >&2
+  ./fossil pull -R sqlite.fsl
+fi
+
+created=
+if ! [ -r sqlite.git/HEAD ]; then
+  echo "Creating initial sqlite.git repository" >&2
+  git --git-dir=sqlite.git init --bare
+  created=1
+fi
+
+echo "Exporting from sqlite.fsl into sqlite.git" >&2
+./fossil export --git sqlite.fsl | \
+./git-export-filter --authors-file sqlite_authors --require-authors \
+  --trunk-is-master --convert-tagger tagger | \
+git --git-dir=sqlite.git fast-import --force
+
+if [ -n "$created" ]; then
+  echo "Compacting sqlite.git" >&2
+  git --git-dir=sqlite.git gc --aggressive --prune=now
+fi

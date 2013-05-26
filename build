@@ -1,0 +1,119 @@
+#!/bin/sh
+
+set -e
+
+mydir="$(cd "$(dirname "$0")" && pwd)"
+cd "$mydir"
+
+CURLOPT="--fail --location --connect-timeout 15 --speed-limit 10240"
+CURLOPT0="$CURLOPT -H 'User-Agent:'"
+
+getmd5()
+{
+  openssl dgst -md5 < "$1" 2>/dev/null | sed -e 's/^[^ ][^ ]* //'
+}
+
+getsha1()
+{
+  openssl dgst -sha1 < "$1" 2>/dev/null | sed -e 's/^[^ ][^ ]* //'
+}
+
+FS118='http://fossil-scm.org/index.html/tarball/fossil-v1.18.tar.gz?uuid=df9da91ba8'
+FS118_O='fossil-v1.18.tar.gz'
+FS118_D='fossil-v1.18'
+FS118_MD5=8f4eca8f7c0fc4a3d7566c54462fb725
+FS118_SHA1=449414cb6e6cff15ce670b32cddc34bb8857d160
+
+GEX='http://repo.or.cz/r/git-export-filter.git'
+GEX_D='git-export-filter.git'
+
+for util in curl openssl sed tar patch make git; do
+  if ! command -v $util > /dev/null; then
+    echo Missing $util >&2
+    exit 1
+  fi
+done
+
+if ! [ -r "$FS118_O" ]; then
+  echo "Downloading $FS118 to $FS118_O" >&2
+  eval "curl $CURLOPT0 -o '$FS118_O' '$FS118'"
+fi
+checkmd5="$(getmd5 "$FS118_O")"
+checksha1="$(getsha1 "$FS118_O")"
+bad=
+if [ "$FS118_MD5" != "$checkmd5" ]; then
+  bad=1
+  echo "Wrong md5 checksum $checkmd5 (expected $FS118_MD5) for $FS118_O" >&2
+fi
+if [ "$FS118_SHA1" != "$checksha1" ]; then
+  bad=1
+  echo "Wrong sha1 checksum $checksha1 (expected $FS118_SHA1) for $FS118_O" >&2
+fi
+if [ -n "$bad" ]; then
+  echo "Checksum verifcation failed for $FS118_O" >&2
+  exit 1
+fi
+
+if ! [ -r "$FS118_D/Makefile" ]; then
+  echo "Extracting $FS118_O" >&2
+  rm -rf "$FS118_D"
+  tar -xzf "$FS118_O"
+fi
+if ! [ -r "$FS118_D/Makefile" ]; then
+  echo "Failed to extract $FS118_O" >&2
+  exit 1
+fi
+if ! [ -r "$FS118_D/.patched" ]; then
+  echo "Patching $FS118_D" >&2
+  patch -f "$FS118_D/VERSION" < patches/VERSION_patch_diff.txt
+  patch -f "$FS118_D/src/export.c" < patches/export_c_patch_diff.txt
+  touch "$FS118_D/.patched"
+fi
+if ! [ -x "$FS118_D/fossil" ]; then
+  echo "Building $FS118_D/fossil" >&2
+  cd "$FS118_D"
+  ./configure
+  make
+  cd "$mydir"
+fi
+if ! [ -x "$FS118_D/fossil" ]; then
+  echo "Failed to build $FS118_D/fossil" >&2
+  exit 1
+fi
+
+if ! [ -r "$GEX_D/Makefile" ]; then
+  echo "Cloning $GEX" >&2
+  rm -rf "$GEX_D"
+  git clone "$GEX" "$GEX_D"
+fi
+if ! [ -r "$GEX_D/.git/HEAD" ]; then
+  echo "Failed to clone $GEX" >&2
+  exit 1
+fi
+if ! [ -x "$GEX_D/git-export-filter" ]; then
+  echo "Building $GEX_D/git-export-filter" >&2
+  cd "$GEX_D"
+  make
+  cd "$mydir"
+fi
+if ! [ -x "$GEX_D/git-export-filter" ]; then
+  echo "Failed to build $GEX_D/git-export-filter" >&2
+  exit 1
+fi
+
+if ! [ -x "./fossil" ]; then
+  rm -f ./fossil
+  ln -s "$FS118_D/fossil" ./fossil
+fi
+if ! [ -x "./git-export-filter" ]; then
+  rm -f ./git-export-filter
+  ln -s "$GEX_D/git-export-filter" ./git-export-filter
+fi
+
+echo ''
+./fossil version
+./git-export-filter --version
+echo ''
+
+echo "Ready to run import script" >&2
+exit 0

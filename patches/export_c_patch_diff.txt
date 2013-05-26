@@ -1,0 +1,56 @@
+--- fossil-v1.18/src/export.c	2011-07-13 16:03:41.000000000 -0700
++++ fossil-v1.18.fix/src/export.c	2013-05-22 20:56:03.000000000 -0700
+@@ -82,6 +82,31 @@
+ 
+ 
+ /*
++** Make ref into a git-acceptable ref name
++*/
++static void massage_refname(char *ref)
++{
++  int i;
++  char *found;
++
++  if (!ref) return;
++  for(i=0; ref[i]; i++){
++    if( ref[i]<=' ' || strchr("~^:/\\*?[\x7f", ref[i]) ) ref[i] = '_';
++  }
++  if( ref[0]=='.' ) ref[0] = '_';
++  if( i && ref[i-1]=='.' ) ref[i-1] = '_';
++  if( i>=5 && fossil_stricmp(&ref[i-5], ".lock")==0 ) ref[i-5] = '_';
++  while ( (found=strstr(ref, "..")) ){
++    found[0] = '_';
++    found[1] = '_';
++  }
++  while ( (found=strstr(ref, "@{")) ){
++    found[0] = '_';
++  }
++}
++
++
++/*
+ ** COMMAND: export
+ **
+ ** Usage: %fossil export --git ?REPOSITORY?
+@@ -154,9 +179,7 @@
+     bag_insert(&vers, ckinId);
+     if( zBranch==0 ) zBranch = "trunk";
+     zBr = mprintf("%s", zBranch);
+-    for(i=0; zBr[i]; i++){
+-      if( !fossil_isalnum(zBr[i]) ) zBr[i] = '_';
+-    }
++    massage_refname(zBr);
+     printf("commit refs/heads/%s\nmark :%d\n", zBr, ckinId+firstCkin);
+     free(zBr);
+     printf("committer");
+@@ -205,9 +228,7 @@
+     if( rid==0 || !bag_find(&vers, rid) ) continue;
+     zTagname += 4;
+     zEncoded = mprintf("%s", zTagname);
+-    for(i=0; zEncoded[i]; i++){
+-      if( !fossil_isalnum(zEncoded[i]) ) zEncoded[i] = '_';
+-    }
++    massage_refname(zEncoded);
+     printf("tag %s\n", zEncoded);
+     printf("from :%d\n", rid+firstCkin);
+     printf("tagger <tagger> %s +0000\n", zSecSince1970);
