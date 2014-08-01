@@ -1,6 +1,6 @@
 --- fossil-v1.18/src/export.c	2011-07-13 16:03:41.000000000 -0700
-+++ fossil-v1.18.fix/src/export.c	2013-05-22 20:56:03.000000000 -0700
-@@ -82,6 +82,31 @@
++++ fossil-v1.18.fix/src/export.c	2014-07-31 18:08:13.000000000 -0700
+@@ -82,9 +82,34 @@ static void print_person(const char *zUs
  
  
  /*
@@ -31,8 +31,30 @@
 +/*
  ** COMMAND: export
  **
- ** Usage: %fossil export --git ?REPOSITORY?
-@@ -154,9 +179,7 @@
+-** Usage: %fossil export --git ?REPOSITORY?
++** Usage: %fossil export --git ?--notes? ?REPOSITORY?
+ **
+ ** Write an export of all check-ins to standard output.  The export is
+ ** written in the git-fast-export file format assuming the --git option is
+@@ -92,6 +117,9 @@ static void print_person(const char *zUs
+ ** interchange format supported, though other formats may be added in
+ ** the future.
+ **
++** With --notes add a note to the refs/notes/fossil notes namespace for
++** each exported commit containing the corresponding fossil check-in hash.
++**
+ ** Run this command within a checkout.  Or use the -R or --repository
+ ** option to specify a Fossil repository to be exported.
+ **
+@@ -105,6 +133,7 @@ void export_cmd(void){
+   Bag blobs, vers;
+   bag_init(&blobs);
+   bag_init(&vers);
++  int notesFlag = find_option("notes", 0, 0)!=0;
+ 
+   find_option("git", 0, 0);   /* Ignore the --git option for now */
+   db_find_and_open_repository(0, 2);
+@@ -154,9 +183,7 @@ void export_cmd(void){
      bag_insert(&vers, ckinId);
      if( zBranch==0 ) zBranch = "trunk";
      zBr = mprintf("%s", zBranch);
@@ -43,7 +65,25 @@
      printf("commit refs/heads/%s\nmark :%d\n", zBr, ckinId+firstCkin);
      free(zBr);
      printf("committer");
-@@ -205,9 +228,7 @@
+@@ -183,6 +210,17 @@ void export_cmd(void){
+       printf("M %s :%d %s\n", zPerm, fid, pFile->zName);
+     }
+     manifest_cache_insert(p);
++    if( notesFlag ){
++      const char *zUuid = db_text("", "SELECT uuid FROM blob WHERE rid=%d", ckinId);
++      printf("commit refs/notes/fossil\n");
++      printf("committer");
++      print_person(zUser);
++      printf(" %s +0000\n", zSecondsSince1970);
++      printf("data 0\n");
++      printf("N inline :%d\n", ckinId+firstCkin);
++      printf("data %d\n%s\n", (int)strlen(zUuid), zUuid);
++      fossil_free(zUuid);
++    }
+     printf("\n");
+   }
+   db_finalize(&q);
+@@ -205,9 +243,7 @@ void export_cmd(void){
      if( rid==0 || !bag_find(&vers, rid) ) continue;
      zTagname += 4;
      zEncoded = mprintf("%s", zTagname);

@@ -74,7 +74,10 @@ allowable characters in names are:
 
 A patch is included in the file `patches/export_c_patch_diff.txt` that allows
 the full diversity of git names to be used and should be applied to the fossil
-`src/export.c` file of fossil version 1.18 before building fossil.
+`src/export.c` file of fossil version 1.18 before building fossil.  It also adds
+an optional --notes option to the fossil export --git command that if given will
+add a note in the refs/notes/fossil namespace to each commit giving the original
+fossil check-in hash for the commit.
 
 A .tar.gz archive of the fossil 1.18 sources may be fetched from:
 
