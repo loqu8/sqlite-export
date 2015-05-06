@@ -78,6 +78,7 @@ if ! [ -r "$FS118_D/.patched" ]; then
   echo "Patching $FS118_D" >&2
   patch -f "$FS118_D/VERSION" < patches/VERSION_patch_diff.txt
   patch -f "$FS118_D/src/export.c" < patches/export_c_patch_diff.txt
+  patch -f "$FS118_D/auto.def" < patches/auto_def_diff.txt
   touch "$FS118_D/.patched"
 fi
 if ! [ -x "$FS118_D/fossil" ]; then
